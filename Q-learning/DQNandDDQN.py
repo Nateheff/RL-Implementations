@@ -1,27 +1,17 @@
-import gymnasium as gym
-import ale_py
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy.random as rand
 from PIL import Image
 import numpy
-from collections import deque
 
-HEIGHT = 160
-WIDTH = 210
-DOWN = 110
-CROP = 84
-CROP_LEFT = (DOWN - CROP) / 2
+from utils import *
 
-GAMMA = 0.9
-EPSILON = 0.1
 
-gym.register_envs(ale_py)
-env = gym.make("ALE/Pong")
-observation, info = env.reset(seed=42)
 
-D = deque(maxlen=50)
+
+
 
 class Q_Function(nn.Module):
     def __init__(self, kernels, kernel_dim, stride):
@@ -53,60 +43,8 @@ q_current = Q_Function(16, 8, 4)
 q_target = Q_Function(16, 8, 4)
 
 
-def process(observation):
 
-    img = Image.fromarray(observation)
-    grayscale = img.convert('L')
-    down = grayscale.resize((DOWN,CROP), resample=Image.BILINEAR)
-    cropped = down.crop((CROP_LEFT,0, CROP_LEFT + CROP, CROP))
-    return cropped
-
-
-def collect_experience():
-
-    history = []
-    observation, info = env.reset(seed=42)
-
-    for _ in range(4):
-        action = env.action_space.sample()
-        observation, reward, terminated, truncated, info = env.step(action)
-        history.append(process(observation))
-
-    n_hist = numpy.asanyarray(history, dtype=numpy.float32)
-    input = torch.from_numpy(n_hist) #input is an 84 x 84 x 4 tensor
-    return input
-
-
-def e_greedy(state):
-    values = q_current(state)
-    if rand.binomial(1, EPSILON) == 1:
-        action = rand.choice(6)
-        greedy = False
-    else:
-        action = torch.argmax(values).item()
-        greedy = True
-    
-    return action, values, greedy
-
-
-def get_next(next_obs, action, reward, old_obs):
-    next_obs = process(observation)
-    next_obs = numpy.asanyarray(next_obs, dtype=numpy.float32)
-    next_obs = torch.from_numpy(next_obs)
-    next_state = torch.cat((old_obs[1:], next_obs.unsqueeze(0)))
-    new_transition = (old_obs, action, reward, next_state)
-    return new_transition
-
-
-def get_randoms():
-    if len(D) < 5:
-        return False
-
-    indices = rand.choice(len(D), size=5).tolist()
-    randoms = [D[index] for index in indices]
-    return randoms
-
-def learn(q_target:Q_Function, q_current:Q_Function, current_transition, transitions=None):
+def learn_DQN(q_target:Q_Function, q_current:Q_Function, transitions=None):
 
     q_target.zero_grad()
 
@@ -121,12 +59,37 @@ def learn(q_target:Q_Function, q_current:Q_Function, current_transition, transit
     q_current.optimizer.step()
     q_current.target_counter += 1
 
+def learn_DDQN(q_target:Q_Function, q_current:Q_Function, transitions=None):
+    """
+    DDQN (Double DQN):
+
+    The only thing that changes is our target. Instead of choosing the maximum action with respect to the parameters 
+    of our target netowrk and then also using the same parameters to calculate the q-value of this action,
+    we use our current network to select the action and the target netwrok to calculate the q-value of said action.
+    If we were to use the target netwrok's paramteres for both, we get a large estimate for the value of (S', A') and
+    only subtracting only the observed (s,a) pair with respect to the current network's paramters. This overestimation
+    causes a bias that is resolved by letting our current network choose the action and our target network evaluate said action.
+    """
+    q_target.zero_grad()
+
+    target = torch.tensor([transition[2] + GAMMA * q_target(transition[3])[torch.argmax(q_current[transition[3]])].item() for transition in transitions])
+    current = torch.tensor([q_current(transition[0])[transition[1]] for transition in transitions])
+    
+
+    loss = q_current.loss(target, current)
+    
+    loss.requires_grad = True
+    loss.backward()
+    q_current.optimizer.step()
+    q_current.target_counter += 1
+
+
 def train(episodes):
 
     for _ in range (episodes):
 
-        input = collect_experience()
-        action, values, greedy = e_greedy(input)
+        input = collect_experience(env)
+        action, values, greedy = e_greedy(q_current, input)
         observation, reward, terminated, truncated, info = env.step(action)
         if terminated or truncated:
             observation, info = env.reset()
@@ -136,9 +99,9 @@ def train(episodes):
         D.append(new_transition)
         if len(D) < 5:
             continue
-        randoms = get_randoms()
+        randoms = get_randoms(D)
         randoms.append(new_transition)
-        learn(q_target, q_current, new_transition, randoms)
+        learn_DQN(q_target, q_current, new_transition, randoms)
         if q_current.target_counter == 1000:
             q_target.load_state_dict(q_current.state_dict())
     
@@ -150,7 +113,7 @@ def play(n_gamnes):
         obs = env.reset()
         score = 0
         gg = False
-        input = collect_experience()
+        input = collect_experience(env)
         while not gg:
             
             q_vals = q_current(input)
