@@ -51,6 +51,7 @@ def create_batches(transitions, index):
     return torch.tensor(batch)
 
 def e_greedy(q_current, state):
+    state = torch.tensor([state])
     values = q_current(state)
     if rand.binomial(1, EPSILON) == 1:
         action = rand.choice(6)

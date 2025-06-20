@@ -29,8 +29,8 @@ class Dueling_DQN(nn.Module):
         x = self.conv2(x)
         x = self.relu(x)
 
-        #x = x.view(x.size()[0], -1)
-        x = x.flatten()
+        x = x.view(x.size()[0], -1)
+
 
         x = self.lin1(x)
         x = self.relu(x)
@@ -49,7 +49,8 @@ q_current = Dueling_DQN(16, 8, 4)
 q_target = Dueling_DQN(16, 8, 4)
 
 
-def choose_action(state):
+def choose_action(state:torch.Tensor):
+    state = state.unsqueeze(0)
     values, advantages = q_current(state)
     if rand.binomial(1, EPSILON) == 1:
         action = rand.choice(6)
@@ -68,31 +69,30 @@ def learn_DuelingDDQN(q_target:Dueling_DQN, q_current:Dueling_DQN, transitions=N
     check = transitions[0]
     current_batch = create_batches(transitions, 0)
     target_batch = create_batches(transitions, 3)
-    values, advantages = q_target(target_batch)
-    
-    target_pre = [[q_target(transition[3])[0], q_target(transition[3])[1]] for transition in transitions]
-    target_values, target_advantages = target_pre[0], target_pre[1]
 
-    current_pre = [[q_current(transition[0])[0], q_current(transition[0])[1]] for transition in transitions]
-    current_values, current_advantages = current_pre
+    target_values, target_advantages = q_target(target_batch)
+    current_values, current_advantages = q_current(current_batch)
+    
 
     Q_targets = q_target.aggreagate(target_values, target_advantages)
     Q_currents = q_current.aggreagate(current_values, current_advantages)
 
     target = None
 
-    loss = q_current.loss(target, Q_currents)
+    loss = q_current.loss(Q_targets, Q_currents)
     
-    loss.requires_grad = True
+    # loss.requires_grad = True
     loss.backward()
     q_current.optimizer.step()
     q_current.target_counter += 1
+    if(q_current.target_counter % 100 == 0):
+        print(loss)
 
 
 def train(episodes):
 
-    for _ in range (episodes):
-
+    for i in range (episodes):
+        
         input = collect_experience(env)
         action = choose_action(input)
         observation, reward, terminated, truncated, info = env.step(action)
@@ -111,4 +111,4 @@ def train(episodes):
             q_target.load_state_dict(q_current.state_dict())
 
 
-train(100)
+train(5000)
