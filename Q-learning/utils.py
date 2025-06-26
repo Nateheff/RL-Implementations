@@ -47,11 +47,19 @@ def collect_experience(env):
 
 
 def create_batches(transitions, index):
-    batch = [transition[index].tolist() for transition in transitions]
-    return torch.tensor(batch)
+    try:
+        batch = [transition[index].tolist() for transition in transitions]
+        return torch.tensor(batch)
+    except Exception as e:
+        print(e, index)
+        for transition in transitions:
+            print("TRANS: ",transition)
+            print("THIRDS: ", transition[3])
+        
+        
 
 def e_greedy(q_current, state):
-    state = torch.tensor([state])
+    
     values = q_current(state)
     if rand.binomial(1, EPSILON) == 1:
         action = rand.choice(6)

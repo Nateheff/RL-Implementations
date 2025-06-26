@@ -9,10 +9,6 @@ import numpy
 from utils import *
 
 
-
-
-
-
 class Q_Function(nn.Module):
     def __init__(self, kernels, kernel_dim, stride):
         super().__init__()
@@ -125,9 +121,5 @@ def play(n_gamnes):
             new = get_next(obs, action, reward, input)
             input = new[3]
 
-        print("Score:", score) 
 
-train(1000)
-play(50)
-env.close()
 

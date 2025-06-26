@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from utils import *
+from PrioritizedReplay import PrioritizedMemory
+
 
 class Dueling_DQN(nn.Module):
     def __init__(self, kernels, kernel_dim, stride):
@@ -48,16 +50,21 @@ class Dueling_DQN(nn.Module):
 q_current = Dueling_DQN(16, 8, 4)
 q_target = Dueling_DQN(16, 8, 4)
 
+def get_DDQN_action(state):
+    values, advantages = q_current(state)
+    action = torch.argmax(advantages).item()
+
+    return action
 
 def choose_action(state:torch.Tensor):
     state = state.unsqueeze(0)
-    values, advantages = q_current(state)
+    
     if rand.binomial(1, EPSILON) == 1:
         action = rand.choice(6)
-        greedy = False
+        
     else:
-        action = torch.argmax(advantages).item()
-        greedy = True
+        action = get_DDQN_action(state)
+        
     
     return action
 
@@ -85,30 +92,85 @@ def learn_DuelingDDQN(q_target:Dueling_DQN, q_current:Dueling_DQN, transitions=N
     loss.backward()
     q_current.optimizer.step()
     q_current.target_counter += 1
-    if(q_current.target_counter % 100 == 0):
-        print(loss)
+
+
+def learn_DuelingDDQN_prioritized(q_target:Dueling_DQN, q_current:Dueling_DQN, transitions=None):
+    pass
+
+
+
+def get_Q(model: Dueling_DQN, observation, action):
+    model.zero_grad()
+    values, advantages = model(observation)
+
+    Q_final = q_target.aggreagate(values, advantages).squeeze()
+    return Q_final[action].item()
+    
 
 
 def train(episodes):
-
+    
     for i in range (episodes):
         
         input = collect_experience(env)
         action = choose_action(input)
         observation, reward, terminated, truncated, info = env.step(action)
+
         if terminated or truncated:
             observation, info = env.reset()
             continue
         
         new_transition = get_next(observation, action, reward, input)
         D.append(new_transition)
+
         if len(D) < 5:
             continue
+
         randoms = get_randoms(D)
         randoms.append(new_transition)
         learn_DuelingDDQN(q_target, q_current, randoms)
+        
         if q_current.target_counter == 1000:
             q_target.load_state_dict(q_current.state_dict())
 
 
-train(5000)
+
+def train_prioritized(episodes):
+    memory = PrioritizedMemory(200)
+    for i in range (episodes):
+        
+        input = collect_experience(env)
+        action = choose_action(input)
+        observation, reward, terminated, truncated, info = env.step(action)
+
+        if terminated or truncated:
+            observation, info = env.reset()
+            continue
+        
+        new_transition = get_next(observation, action, reward, input)
+
+        if memory.count <= 4:
+            memory.add(new_transition, 1)
+            continue
+
+        randoms, indices = memory.get()
+        randoms.append(new_transition)
+        indices = torch.cat((indices, torch.tensor([memory.next_idx])))
+
+        learn_DuelingDDQN(q_target, q_current, randoms)
+        
+        for random, index in zip(randoms, indices):
+            next_state = random[3].unsqueeze(0)
+            current_state = random[0].unsqueeze(0)
+
+            value = random[2] + GAMMA * get_Q(q_target, next_state,get_DDQN_action(next_state)) - get_Q(q_current, current_state, random[1])
+            value = abs(value) + 1e-8
+
+            memory.update(index, value)
+        
+        memory.add(new_transition, value)
+
+        if q_current.target_counter == 1000:
+            q_target.load_state_dict(q_current.state_dict())
+
+train_prioritized(5000)
