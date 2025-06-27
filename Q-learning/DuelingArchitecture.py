@@ -19,9 +19,9 @@ class Dueling_DQN(nn.Module):
         self.value_stream = nn.Linear(512, out_features=1)
         self.advantage_stream = nn.Linear(512, out_features=6)
         
-
+        self.lr = 0.0001
         self.loss = nn.MSELoss()
-        self.optimizer = optim.RMSprop(self.parameters(), lr=0.01)
+        self.optimizer = optim.RMSprop(self.parameters(), lr=self.lr)
         self.target_counter = 0
 
     def forward(self, input):
@@ -68,10 +68,17 @@ def choose_action(state:torch.Tensor):
     
     return action
 
-def learn_DuelingDDQN(q_target:Dueling_DQN, q_current:Dueling_DQN, transitions=None):
-    """
+def parse_transitions(transitions):
+    #We need to return 3 tensors each containing the values of each transition at the respective index
+    actions, rewards = ([transition[i+1] for transition in transitions] for i in range(2))
+    next_states = torch.stack([t[3] for t in transitions])
+    
+    return torch.tensor(actions), torch.tensor(rewards), next_states
 
-    """
+
+
+def learn_DuelingDDQN(q_target:Dueling_DQN, q_current:Dueling_DQN, transitions=None):
+
     q_target.zero_grad()
     check = transitions[0]
     current_batch = create_batches(transitions, 0)
@@ -84,18 +91,43 @@ def learn_DuelingDDQN(q_target:Dueling_DQN, q_current:Dueling_DQN, transitions=N
     Q_targets = q_target.aggreagate(target_values, target_advantages)
     Q_currents = q_current.aggreagate(current_values, current_advantages)
 
-    target = None
+
 
     loss = q_current.loss(Q_targets, Q_currents)
     
-    # loss.requires_grad = True
+
     loss.backward()
     q_current.optimizer.step()
     q_current.target_counter += 1
 
 
-def learn_DuelingDDQN_prioritized(q_target:Dueling_DQN, q_current:Dueling_DQN, transitions=None):
-    pass
+def learn_DuelingDDQN_prioritized(q_target:Dueling_DQN, q_current:Dueling_DQN, actions, rewards, next_states, weights, transitions=None):
+
+
+    
+    current_batch = create_batches(transitions, 0)
+    Q_streams= q_current(current_batch)
+    #Q_values of all actions for each transition in batch
+    Q_currents = q_current.aggreagate(*Q_streams)
+
+    #Q_values of chosen actions in batch
+    Q_chosen = Q_currents.gather(1, actions.unsqueeze(1)).squeeze() 
+    
+    with torch.no_grad():
+        next_q = q_current(next_states)
+        best_actions = q_current.aggreagate(*next_q).argmax(1)
+        target_q = q_target.aggreagate(*q_target(next_states))
+        q_targets = rewards + GAMMA * target_q.gather(1, best_actions.unsqueeze(1)).squeeze()
+
+    td_errors = q_targets - Q_chosen
+    loss = (weights * td_errors.pow(2)).mean()
+    
+    loss.backward()
+    print(loss)
+    q_current.optimizer.step()
+    
+    return td_errors
+
 
 
 
@@ -103,7 +135,7 @@ def get_Q(model: Dueling_DQN, observation, action):
     model.zero_grad()
     values, advantages = model(observation)
 
-    Q_final = q_target.aggreagate(values, advantages).squeeze()
+    Q_final = model.aggreagate(values, advantages).squeeze()
     return Q_final[action].item()
     
 
@@ -137,6 +169,7 @@ def train(episodes):
 
 def train_prioritized(episodes):
     memory = PrioritizedMemory(200)
+    
     for i in range (episodes):
         
         input = collect_experience(env)
@@ -149,28 +182,46 @@ def train_prioritized(episodes):
         
         new_transition = get_next(observation, action, reward, input)
 
-        if memory.count <= 4:
+        if memory.count <= memory.batch_size:
             memory.add(new_transition, 1)
             continue
 
         randoms, indices = memory.get()
         randoms.append(new_transition)
+
         indices = torch.cat((indices, torch.tensor([memory.next_idx])))
+        actions, rewards, next_states = parse_transitions(randoms)
 
-        learn_DuelingDDQN(q_target, q_current, randoms)
-        
-        for random, index in zip(randoms, indices):
-            next_state = random[3].unsqueeze(0)
-            current_state = random[0].unsqueeze(0)
+        weights = memory.weights(indices)
+        weights[4] = 0
+        weights = torch.tensor(weights)
 
-            value = random[2] + GAMMA * get_Q(q_target, next_state,get_DDQN_action(next_state)) - get_Q(q_current, current_state, random[1])
-            value = abs(value) + 1e-8
+        priorities = learn_DuelingDDQN_prioritized(q_target, q_current, actions, rewards, next_states, weights,randoms)
 
-            memory.update(index, value)
-        
-        memory.add(new_transition, value)
+        for i,idx in enumerate(indices):
+            memory.priorities[idx] = abs(priorities[i])
+
+        memory.add(new_transition, abs(priorities[4]))
 
         if q_current.target_counter == 1000:
             q_target.load_state_dict(q_current.state_dict())
 
 train_prioritized(5000)
+
+
+
+
+"""
+        for random, index in zip(randoms, indices):
+            next_state = random[3].unsqueeze(0)
+            current_state = random[0].unsqueeze(0)
+            weight = memory.weights(index)
+            value = random[2] + GAMMA * get_Q(q_target, next_state,get_DDQN_action(next_state)) - get_Q(q_current, current_state, random[1])
+            value = abs(value) + 1e-8
+
+            memory.update(index, value)
+            
+            loss = weight * (value ** 2)
+            loss.backward()
+                
+"""           

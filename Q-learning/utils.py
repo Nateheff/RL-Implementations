@@ -16,6 +16,8 @@ EPSILON = 0.1
 
 GAMMA = 0.9
 
+batch_size = 4
+
 gym.register_envs(ale_py)
 env = gym.make("ALE/Pong")
 observation, info = env.reset(seed=42)
@@ -48,8 +50,8 @@ def collect_experience(env):
 
 def create_batches(transitions, index):
     try:
-        batch = [transition[index].tolist() for transition in transitions]
-        return torch.tensor(batch)
+        batch = torch.stack([transition[index] for transition in transitions])
+        return batch
     except Exception as e:
         print(e, index)
         for transition in transitions:
@@ -81,9 +83,9 @@ def get_next(next_obs, action, reward, old_obs):
 
 
 def get_randoms(D):
-    if len(D) < 5:
+    if len(D) < batch_size:
         return False
 
-    indices = rand.choice(len(D), size=5).tolist()
+    indices = rand.choice(len(D), size=batch_size).tolist()
     randoms = [D[index] for index in indices]
     return randoms

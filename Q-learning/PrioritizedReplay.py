@@ -18,6 +18,8 @@ class PrioritizedMemory():
         self.priorities = torch.zeros(transitions)
         self.D = []
         self.count = 0
+        self.beta = 0.6
+        self.batch_size = 4
 
     def add(self, transition, priority):
 
@@ -33,16 +35,29 @@ class PrioritizedMemory():
             self.D[remove_idx] = transition
 
     def get(self):
-        if self.count <= 4:
+        if self.count <= self.batch_size:
             return False
-        probabilities = torch.softmax(self.priorities, dim=0)
-        # print(self.count, self.priorities, probabilities)
-        samples = torch.multinomial(probabilities[:self.count], num_samples=4)
+        probabilities = self.priorities / self.priorities.sum().item()
+
+        samples = torch.multinomial(probabilities[:self.count], num_samples=self.batch_size)
         randoms = [self.D[sample] for sample in samples]
         return randoms, samples
     
+    def get_rank(self):
+        pass
+
+    
     def update(self, idx, value):
         self.priorities[idx] = value
+    
+    def weights(self, indices):
+        
+        N = len(self.D)
+        priorities= [self.priorities[i] for i in indices]
+
+        weights = [((1/N) * (1/priority)) ** self.beta for priority in priorities]
+        return weights
+    
 
     @property
     def next_idx(self):
