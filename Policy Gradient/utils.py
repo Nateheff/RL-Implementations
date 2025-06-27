@@ -60,7 +60,9 @@ def create_batches(transitions, index):
         
         
 
-def e_greedy(q_current, state):
+def e_greedy(q_current, state, epsilon=None):
+    if epsilon:
+        EPSILON = epsilon
     
     values = q_current(state)
     if rand.binomial(1, EPSILON) == 1:
