@@ -197,7 +197,7 @@ def A3C(global_params):
                         global_param.grad = update.clone()
                     else:
                         global_param.grad = global_param.grad + update
-                        #Only in Hogwild as this overwrite global grad in place. 
+                        
 
         optimizer.step()
         optimizer.zero_grad()
@@ -212,7 +212,7 @@ def learn_async():
         workers = []
         
         for _ in range(1):
-            #Each agent gets it own epsilon for e-greedy
+          
             
             
             p = mp.Process(target=A3C, args=(global_model,))
