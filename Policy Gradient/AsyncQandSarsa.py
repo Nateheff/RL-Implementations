@@ -61,6 +61,9 @@ def double(next_state, target, online):
     with torch.no_grad():
         action = torch.argmax(online(next_state))
         return target(next_state)[action]
+    
+
+#ONE-STEP Q LEARNING
 
 def agent_task_Q(global_q, global_target, counter, epsilon):
     optimizer = torch.optim.RMSprop(global_q.parameters(), lr=1e-4)
@@ -131,6 +134,8 @@ the target model, and we are not using e-greedy so it is a completely different 
 choose the target action vs. the regular e-greedy action selection.
 """
 
+#ONE-STEP SARSA
+
 def agent_task_Sarsa(global_q, global_target, counter, epsilon):
     optimizer = torch.optim.RMSprop(global_q.parameters(), lr=1e-4)
 
@@ -198,6 +203,9 @@ def agent_task_Sarsa(global_q, global_target, counter, epsilon):
             initial_state = next_state
             action = next_action
 
+
+#N-STEP Q LEARNING
+
 n = 5
 
 def agent_task_nstep_Q(global_q, global_target, counter, epsilon):
@@ -224,7 +232,7 @@ def agent_task_nstep_Q(global_q, global_target, counter, epsilon):
         
         done = False
         rewards = []
-        states = [initial_state]
+        states = []
         t = 0
         #We go n steps or until termination collecting states and rewards
         while not done and t < n:
@@ -256,7 +264,7 @@ def agent_task_nstep_Q(global_q, global_target, counter, epsilon):
 
             loss = (R - state)**2
             loss.backward()
-
+        
         for global_param, local_param in zip(global_q.parameters(),local_model.parameters()):
                 if local_param.grad is not None:
                     #Usual update: global_param.grad += local_param.grad.clone()
@@ -269,11 +277,6 @@ def agent_task_nstep_Q(global_q, global_target, counter, epsilon):
             counter.value += 1
             if counter.value % 500 == 0:
                     global_target.load_state_dict(global_q.state_dict())
-
-
-
-
-                
 
 
 
