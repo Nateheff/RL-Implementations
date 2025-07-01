@@ -30,7 +30,8 @@ def process(observation):
     grayscale = img.convert('L')
     down = grayscale.resize((DOWN,CROP), resample=Image.BILINEAR)
     cropped = down.crop((CROP_LEFT,0, CROP_LEFT + CROP, CROP))
-    return cropped
+    
+    return numpy.array(cropped, dtype=numpy.float32) / 255.0
 
 
 def collect_experience(env):
@@ -91,3 +92,76 @@ def get_randoms(D):
     indices = rand.choice(len(D), size=batch_size).tolist()
     randoms = [D[index] for index in indices]
     return randoms
+
+
+def get_batches_TRPO(batch_size, policy):
+
+    states = []
+    actions = []
+    rewards = []
+    log_probs = []
+    advantages = []
+
+
+    while len(states) < batch_size:
+        obs, info = env.reset()
+        state = process(obs)
+        state = numpy.asanyarray(state, dtype=numpy.float32)
+        initial_state = torch.from_numpy(state).unsqueeze(0)
+        done = False
+
+        episode_rewards = []
+        episode_states = []
+        episode_actions = []
+        episode_log_probs = []
+        episode_q_vals = []
+
+        while not done:
+            with torch.no_grad():
+                q_vals, probs = policy(initial_state)
+                
+                dist = torch.distributions.Categorical(probs)
+                action = dist.sample()
+                log_prob = dist.log_prob(action)
+
+            new_obs, reward, terminated, truncated, info = env.step(action.item())
+            
+            next_state = process(new_obs)
+            next_state = torch.from_numpy(next_state).unsqueeze(0)
+
+            episode_states.append(state.squeeze())
+            episode_actions.append(action)
+            episode_log_probs.append(log_prob)
+            episode_rewards.append(reward)
+            episode_q_vals.append(q_vals.squeeze(0))
+
+            initial_state = next_state
+            done = terminated or truncated
+
+        total_return = 0
+        discounted_rewards = []
+        for r in reversed(episode_rewards):
+            total_return = r + GAMMA * total_return
+            discounted_rewards.insert(0, total_return)
+        
+        for i in range(len(episode_rewards)):
+            q = episode_q_vals[i]
+            a = episode_actions[i]
+            advantage = discounted_rewards[i] - q[a]
+            advantages.append(advantage)
+
+        states.extend(episode_states)
+        actions.extend(episode_actions)
+        log_probs.extend(episode_log_probs)
+        rewards.extend([total_return]*len(episode_rewards))
+
+    states = states[:batch_size]
+    actions = actions[:batch_size] 
+    advantages = advantages[:batch_size]
+    log_probs = log_probs[:batch_size]
+    rewards = rewards[:batch_size]
+
+    return (torch.cat(states), torch.tensor(actions), torch.tensor(advantages), torch.stack(log_probs), rewards)
+
+
+

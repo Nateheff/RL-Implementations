@@ -230,5 +230,5 @@ def learn_async():
             p.join()
         print(e)
     
-
-learn_async()
+if __name__ == "__main__":
+    learn_async()

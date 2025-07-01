@@ -80,7 +80,7 @@ def agent_task_Q(global_q, global_target, counter, epsilon):
 
         obs, info = env.reset()
         state = process(obs)
-        state = numpy.asanyarray(state, dtype=numpy.float32)
+       
         initial_state = torch.from_numpy(state).unsqueeze(0)
         done = False
         
@@ -152,7 +152,7 @@ def agent_task_Sarsa(global_q, global_target, counter, epsilon):
         local_model.load_state_dict(global_q.state_dict())
         obs, info = env.reset()
         state = process(obs)
-        state = numpy.asanyarray(state, dtype=numpy.float32)
+        
         initial_state = torch.from_numpy(state).unsqueeze(0)
         done = False
 
@@ -165,7 +165,7 @@ def agent_task_Sarsa(global_q, global_target, counter, epsilon):
                 done = True
                 break
             next_state = process(new_obs)
-            next_state = numpy.asanyarray(next_state, dtype=numpy.float32)
+           
             next_state = torch.from_numpy(next_state).unsqueeze(0)
 
             next_action, next_values, greedy = e_greedy(local_model, next_state, epsilon)
@@ -227,7 +227,7 @@ def agent_task_nstep_Q(global_q, global_target, counter, epsilon):
 
         obs, info = env.reset()
         state = process(obs)
-        state = numpy.asanyarray(state, dtype=numpy.float32)
+        
         initial_state = torch.from_numpy(state).unsqueeze(0)
         
         done = False
@@ -240,7 +240,7 @@ def agent_task_nstep_Q(global_q, global_target, counter, epsilon):
             new_obs, reward, terminated, truncated, info = env.step(action)
 
             next_state = process(new_obs)
-            next_state = numpy.asanyarray(next_state, dtype=numpy.float32)
+            
             next_state = torch.from_numpy(next_state).unsqueeze(0)
             rewards.append(reward)
             states.append(values[action])

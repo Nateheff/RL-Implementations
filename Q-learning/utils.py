@@ -30,7 +30,7 @@ def process(observation):
     grayscale = img.convert('L')
     down = grayscale.resize((DOWN,CROP), resample=Image.BILINEAR)
     cropped = down.crop((CROP_LEFT,0, CROP_LEFT + CROP, CROP))
-    return cropped
+    return numpy.array(cropped, dtype=numpy.float32) / 255.0
 
 
 def collect_experience(env):
@@ -75,7 +75,7 @@ def e_greedy(q_current, state):
 
 def get_next(next_obs, action, reward, old_obs):
     next_obs = process(next_obs)
-    next_obs = numpy.asanyarray(next_obs, dtype=numpy.float32)
+    
     next_obs = torch.from_numpy(next_obs)
     next_state = torch.cat((old_obs[1:], next_obs.unsqueeze(0)))
     new_transition = (old_obs, action, reward, next_state)
