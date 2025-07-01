@@ -4,7 +4,7 @@
 [![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
 [![Code style: Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-PyTorch implementations of fundamental reinforcement learning algorithms based on their seminal papers. Designed for clarity and educational purposes.
+PyTorch implementations of fundamental reinforcement learning algorithms based on their seminal papers.
 
 ## 📜 Implemented Algorithms
 
