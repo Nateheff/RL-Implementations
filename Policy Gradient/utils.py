@@ -106,8 +106,8 @@ def get_batches_TRPO(batch_size, policy):
     while len(states) < batch_size:
         obs, info = env.reset()
         state = process(obs)
-        state = numpy.asanyarray(state, dtype=numpy.float32)
-        initial_state = torch.from_numpy(state).unsqueeze(0)
+        
+        initial_state = torch.from_numpy(state).unsqueeze(0).unsqueeze(0)
         done = False
 
         episode_rewards = []
@@ -127,9 +127,9 @@ def get_batches_TRPO(batch_size, policy):
             new_obs, reward, terminated, truncated, info = env.step(action.item())
             
             next_state = process(new_obs)
-            next_state = torch.from_numpy(next_state).unsqueeze(0)
+            next_state = torch.from_numpy(next_state).unsqueeze(0).unsqueeze(0)
 
-            episode_states.append(state.squeeze())
+            episode_states.append(next_state.squeeze(0))
             episode_actions.append(action)
             episode_log_probs.append(log_prob)
             episode_rewards.append(reward)
@@ -161,7 +161,7 @@ def get_batches_TRPO(batch_size, policy):
     log_probs = log_probs[:batch_size]
     rewards = rewards[:batch_size]
 
-    return (torch.cat(states), torch.tensor(actions), torch.tensor(advantages), torch.stack(log_probs), rewards)
+    return (torch.stack(states), torch.tensor(actions), torch.tensor(advantages), torch.stack(log_probs), rewards)
 
 
 
