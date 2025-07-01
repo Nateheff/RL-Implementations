@@ -25,8 +25,6 @@ class Policy(nn.Module):
         
     def forward(self, x:torch.Tensor):
 
-        
-
         x = self.conv1(x)
         x = self.relu(x)
         x = self.conv2(x)
@@ -68,7 +66,7 @@ def fisher_vector_product(v, states, damping=1e-2):
     _, probs = policy(states)
     old_probs = probs.detach()
     old_logs = torch.log(old_probs + 1e-8)
-    # Compute KL divergence (simplified: just entropy for FIM approximation)
+    # Compute KL divergence 
     log_probs = torch.log(probs + 1e-8)
     kl = (old_probs * (old_logs - log_probs)).sum(dim=-1).mean() #E(a~pi_old)[log(pi_old(a)/pi(a))]
     
@@ -78,7 +76,7 @@ def fisher_vector_product(v, states, damping=1e-2):
     
 
     gv = torch.dot(g_flat, v)
-    #Compute second order derivat
+    #FVP ∇_θ (∇_θ f(θ) · v) = Hessian_f(θ) * v where f = KL divergence
     fvp = torch.autograd.grad(gv, policy.parameters(), retain_graph=True)
     flat_fvp = torch.cat([f.reshape(-1) for f in fvp])
 
@@ -126,17 +124,23 @@ def TRPO(steps):
     global policy
 
     """
-    We collect a batch of states, actions, advantages, log probs, and rewards following the old policy
-    We then use our current policy to get new log probs for these same states and actions
-    We then calculate our surrogate loss
-    NOTE: This loss does not directly optimize rewards, it instead looks at how mch the probability of actions
+    1. We collect a batch of states, actions, advantages, log probs, and rewards following the old policy
+
+    2. We then use our current policy to get new log probs for these same states and actions
+
+    3. We then calculate our surrogate loss
+    NOTE: This loss does not directly optimize rewards, it instead looks at how much the probability of actions
     changed weighted by how good those actions were. We are using gradient ascent so we are trying to maximize this.
-    We then compute our first order derivatives
-    We then compute out step direction using Conjugate Gradient and Fisher vector product to
+    
+    4. We then compute our first order derivatives
+
+    5. We then compute out step direction using Conjugate Gradient and Fisher vector product to
     avoid having to calcualte the full fisher information matrix.
     Our update is bounded by the KL divergence of the two policies and this bound is represented in
     the update as step^T * F * step <= 2 * delta
-    After we calcualte our step, we update our parameters 
+    
+    6.After we calcualte our step, we update our parameters 
+    
     We use an additional Adam update since our model is also returning Q_values.
     """
     for i in range(steps):
@@ -161,13 +165,6 @@ def TRPO(steps):
 
         F_g = conjugate_gradient(g_flat, states ,10) #step direction
 
-        """
-        # Compute step size using trust region constraint
-        # step^T * F * step <= 2 * delta
-        step_fvp = fisher_vector_product(step_direction, states)
-        shs = torch.dot(step_direction, step_fvp)  # step^T * Hessian * step
-        step_size = torch.sqrt(2 * delta / (shs + 1e-8))
-        """
         g_Fg = torch.dot(g_flat, F_g) 
 
         trust_scale = torch.sqrt(2 * delta / (g_Fg + 1e-8))
