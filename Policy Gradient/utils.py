@@ -13,8 +13,8 @@ CROP = 84
 CROP_LEFT = (DOWN - CROP) / 2
 
 EPSILON = 0.1
-
-GAMMA = 0.9
+LAMBDA = 0.95
+GAMMA = 0.99
 
 batch_size = 4
 
@@ -164,4 +164,94 @@ def get_batches_TRPO(batch_size, policy):
     return (torch.stack(states), torch.tensor(actions), torch.tensor(advantages), torch.stack(log_probs), rewards)
 
 
+def get_batches_GAE(batch_size, policy):
 
+    states = []
+    actions = []
+    returns = []
+    log_probs = []
+    advantages = []
+
+
+    while len(states) < batch_size:
+        obs, info = env.reset()
+        state = process(obs)
+        
+        initial_state = torch.from_numpy(state).unsqueeze(0).unsqueeze(0)
+        done = False
+
+        episode_rewards = []
+        episode_states = []
+        episode_actions = []
+        episode_log_probs = []
+        episode_vals = []
+
+        while not done:
+            current_state = initial_state
+            with torch.no_grad():
+                vals, probs = policy(current_state)
+                
+            dist = torch.distributions.Categorical(probs)
+            action = dist.sample()
+            log_prob = dist.log_prob(action)
+
+            new_obs, reward, terminated, truncated, info = env.step(action.item())
+            
+            next_state = process(new_obs)
+            next_state = torch.from_numpy(next_state).unsqueeze(0).unsqueeze(0)
+
+            episode_states.append(current_state.squeeze(0))
+            episode_actions.append(action)
+            episode_log_probs.append(log_prob)
+            episode_rewards.append(reward)
+            episode_vals.append(vals.squeeze(0))
+
+            current_state = next_state
+            done = terminated or truncated
+
+        episode_rewards = torch.tensor(episode_rewards)
+        episode_vals = torch.tensor(episode_vals)
+
+        episode_returns = []
+        discounted_return = 0
+        for r in reversed(episode_rewards):
+            discounted_return = r + GAMMA * discounted_return
+            episode_returns.append(discounted_return)
+
+        episode_returns = torch.tensor(episode_returns)
+
+        episode_advantages = []
+        gae = 0
+
+        with torch.no_grad():
+            final_value, _ = policy(current_state)
+            final_value = final_value.squeeze(0)
+
+
+        next_value = final_value
+        for i in reversed(range(len(episode_rewards))):
+            if i == len(episode_rewards) - 1:
+                #last step
+                current_td = episode_rewards[i] - episode_vals[i]
+            else:
+                current_td = episode_rewards[i] + GAMMA * next_value - episode_vals[i]
+            
+            gae = current_td + GAMMA * LAMBDA * gae
+            episode_advantages.insert(0, gae)
+            next_value = episode_vals[i]
+
+        episode_advantages = torch.tensor(episode_advantages)
+
+        states.extend(episode_states)
+        actions.extend(episode_actions)
+        log_probs.extend(episode_log_probs)
+        advantages.extend(episode_advantages)
+        returns.extend(episode_returns)
+
+    states = states[:batch_size]
+    actions = actions[:batch_size] 
+    advantages = advantages[:batch_size]
+    log_probs = log_probs[:batch_size]
+    returns = returns[:batch_size]
+
+    return (torch.stack(states), torch.tensor(actions), torch.stack(advantages), torch.stack(log_probs), torch.stack(returns))
