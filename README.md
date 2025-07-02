@@ -17,6 +17,7 @@ PyTorch implementations of fundamental reinforcement learning algorithms based o
 | **Asynchronous Q-Learning** | [Mnih et al. (2016)](https://arxiv.org/abs/1602.01783) | PyTorch | ✅ |
 | **Asynchronous SARSA** | [Mnih et al. (2016)](https://arxiv.org/abs/1602.01783) | PyTorch | ✅ |
 | **TRPO** (Trust Region Policy Optimization) | [Schulman et al. (2017)](https://arxiv.org/pdf/1502.05477) | PyTorch | ✅ |
+| **GAE** (Generalized Advantage Estimation) | [Schulman et al. (2018)](https://arxiv.org/pdf/1506.02438) | PyTorch | ✅ |
 
 
 
