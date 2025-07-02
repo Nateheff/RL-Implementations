@@ -190,11 +190,11 @@ def get_batches_GAE(batch_size, policy):
             current_state = initial_state
             with torch.no_grad():
                 vals, probs = policy(current_state)
-                
-            dist = torch.distributions.Categorical(probs)
-            action = dist.sample()
-            log_prob = dist.log_prob(action)
-
+                dist = torch.distributions.Categorical(probs)
+                action = dist.sample()
+                log_prob = dist.log_prob(action)
+            
+            
             new_obs, reward, terminated, truncated, info = env.step(action.item())
             
             next_state = process(new_obs)
@@ -210,7 +210,7 @@ def get_batches_GAE(batch_size, policy):
             done = terminated or truncated
 
         episode_rewards = torch.tensor(episode_rewards)
-        episode_vals = torch.tensor(episode_vals)
+        episode_vals = torch.stack(episode_vals)
 
         episode_returns = []
         discounted_return = 0

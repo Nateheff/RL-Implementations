@@ -62,7 +62,7 @@ def fvp_values(v, states, returns, damping=1e-2):
     values = values.squeeze(-1)
 
     # Compute Loss
-    loss = F.mse_loss(returns, values)
+    loss = F.mse_loss(values, returns)
     
     # Compute gradient of KL w.r.t. policy parameters
     params = policy.get_value_params()
@@ -240,7 +240,8 @@ def TRPO_GAE(steps):
         values, _ = policy(states_detached)
         values = values.squeeze()
         
-        loss_value = F.mse_loss(values, returns)
+        loss_value = F.mse_loss(returns, values)
+
         value_params = policy.get_value_params()
 
         g_values = torch.autograd.grad(loss_value, value_params)
