@@ -10,7 +10,7 @@ PyTorch implementations of fundamental reinforcement learning algorithms based o
 
 | Algorithm | Paper | Framework | Status |
 |-----------|-------|-----------|--------|
-| **DQN** (Deep Q-Network) | [Mnih et al. (2015)](https://www.nature.com/articles/nature14236) | PyTorch | ✅ |
+| **DQN** (Deep Q-Network) | [Mnih et al. (2015)](https://www.cs.toronto.edu/~vmnih/docs/dqn.pdf) | PyTorch | ✅ |
 | **Double DQN** | [van Hasselt et al. (2015)](https://arxiv.org/abs/1509.06461) | PyTorch | ✅ |
 | **Dueling DQN** | [Wang et al. (2016)](https://arxiv.org/abs/1511.06581) | PyTorch | ✅ |
 | **A3C** (Asynchronous Advantage Actor-Critic) | [Mnih et al. (2016)](https://arxiv.org/abs/1602.01783) | PyTorch | ✅ |
