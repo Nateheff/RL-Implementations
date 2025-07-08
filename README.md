@@ -19,6 +19,7 @@ PyTorch implementations of fundamental reinforcement learning algorithms based o
 | **TRPO** (Trust Region Policy Optimization) | [Schulman et al. (2017)](https://arxiv.org/pdf/1502.05477) | PyTorch | ✅ |
 | **GAE** (Generalized Advantage Estimation) | [Schulman et al. (2018)](https://arxiv.org/pdf/1506.02438) | PyTorch | ✅ |
 | **PPO** (Proximal Policy Optimization) | [Schulman et al. (2017)](https://arxiv.org/pdf/1707.06347) | PyTorch | ✅ |
+| **ACKTR** (Actor Critic Kronecker Factored Trust Region) | [Wu et al. (2017)](https://arxiv.org/pdf/1708.05144) | PyTorch | ✅ |
 
 
 
