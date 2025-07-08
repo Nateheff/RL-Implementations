@@ -93,6 +93,64 @@ def get_randoms(D):
     randoms = [D[index] for index in indices]
     return randoms
 
+def get_episode(policy, num_left):
+    
+    obs, info = env.reset()
+    state = process(obs)
+    current_state = torch.from_numpy(state)
+
+    done = False
+
+    episode_states = []
+    episode_actions = []
+    episode_rewards = []
+
+    t=0
+    while not done and t < num_left:
+        with torch.no_grad():
+            current_state = current_state.unsqueeze(0).unsqueeze(0)
+            _, probs, _, _ = policy(current_state)
+            dist = torch.distributions.Categorical(probs)
+            action = dist.sample()
+        
+        next_obs, reward, terminated, truncated, info = env.step(action)
+
+        next_state = process(next_obs)
+        next_state = torch.from_numpy(next_state)
+        
+        episode_states.append(current_state.squeeze(0))
+        episode_actions.append(action)
+        episode_rewards.append(reward)
+
+        current_state = next_state
+        t += 1
+        done = terminated or truncated
+
+    return episode_states, episode_actions, episode_rewards
+
+
+
+def process_batch(batch, policy, batch_size, episode_boundaries, hidden_size):
+    
+    hidden_state = torch.zeros(batch_size, hidden_size)
+    cell_state = torch.zeros(batch_size, hidden_size)
+
+    values = []
+    probs = []
+
+    prev_boundary = 0
+    for boundary in episode_boundaries:
+        episode_states = batch[prev_boundary: boundary]
+        
+        episode_values, episode_probs, _, _ = policy(episode_states)
+
+        values.append(episode_values)
+        probs.append(episode_probs)
+
+        prev_boundary = boundary
+
+    return torch.cat(values), torch.cat(probs)
+        
 
 def get_batches_TRPO(batch_size, policy):
 
@@ -255,3 +313,77 @@ def get_batches_GAE(batch_size, policy):
     returns = returns[:batch_size]
 
     return (torch.stack(states), torch.tensor(actions), torch.stack(advantages), torch.stack(log_probs), torch.stack(returns))
+
+
+
+
+def get_batches_ACKTR(batch_size, policy, hidden_size):
+    batch_episodes = []
+    batch_actions = []
+    batch_advantages = []
+    
+    
+    batch_rewards = []
+    batch_states = []
+    batch_returns = []
+    episode_boundaries = []
+
+    current_episode = 0
+
+    while len(batch_states) < batch_size:
+        episode_states, episode_actions, episode_rewards = get_episode(policy, batch_size - len(batch_states))
+        batch_states.extend(episode_states)
+        batch_actions.extend(episode_actions)
+        batch_rewards.extend(episode_rewards)
+        episode_boundaries.append(len(batch_states))
+
+    batch = torch.stack(batch_states)
+    batch_actions = torch.cat(batch_actions)
+
+    batch_values, batch_probs = process_batch(batch, policy, batch_size, episode_boundaries, hidden_size)
+    dist = torch.distributions.Categorical(batch_probs)
+    batch_log_probs = dist.log_prob(batch_actions)
+    batch_rewards = torch.tensor(batch_rewards)
+
+    prev_boundary = 0
+    for boundary in episode_boundaries:
+        # Get episode data
+        episode_rewards = batch_rewards[prev_boundary:boundary]
+        episode_values = batch_values[prev_boundary:boundary]
+        episode_states = batch_states[prev_boundary:boundary]
+        
+        # Compute returns for this episode
+        episode_returns = []
+        discounted_return = 0
+
+        for r in reversed(episode_rewards):
+            discounted_return = r + GAMMA * discounted_return
+            episode_returns.append(discounted_return)
+        episode_returns.reverse()
+
+        episode_advantages = []
+        gae = 0
+        
+        # Get next value (0 for terminal state)
+        next_value = 0  # Terminal state value
+
+        for i in range(len(episode_rewards)):
+            if i == len(episode_rewards) - 1:
+                #last step
+                current_td = episode_rewards[i] - episode_values[i]
+            else:
+                current_td = episode_rewards[i] + GAMMA * episode_values[i + 1] - episode_values[i]
+
+            gae = current_td + GAMMA*LAMBDA * gae
+            batch_advantages.insert(0, gae)
+            next_value = batch_values[i]
+
+        # Add to batch lists
+        batch_returns.extend(episode_returns)
+        batch_advantages.extend(episode_advantages)
+        
+        prev_boundary = boundary
+
+    batch_advantages = torch.tensor(batch_advantages)
+    batch_returns = torch.tensor(batch_returns)
+    return batch_values, batch_actions, batch_advantages, batch_log_probs, batch_returns
