@@ -151,11 +151,12 @@ def register_kfac_hooks(model):
 
 
 def KFac(input, gradient):
-
+    # Layer gradient convariance matrix
     G = gradient.mT @ gradient
-
+    #Layer input covariance matrix
     A = input.mT @ input
 
+    # Invert both and add small quanitity for numerical stability
     G_i = torch.linalg.inv(G + 1e-5 * torch.eye(G.shape[0]))
     A_i = torch.linalg.inv(A + 1e-5 * torch.eye(A.shape[0]))
 
@@ -184,6 +185,7 @@ def ACKTR(global_params):
         
         values, actions, advantages, log_probs, returns = get_batches_ACKTR(256, local_model, 128)
         
+        # Normalize advantages
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
         values = values.squeeze()
 
@@ -192,15 +194,15 @@ def ACKTR(global_params):
         loss_value = F.mse_loss(values, returns)  # shape match
 
         loss = loss_policy + loss_value
-
+        print(loss)
         #Compute new gradients
-        
         local_model.zero_grad()
         loss.backward()
         
         with torch.no_grad():
             for name, module in local_model.named_modules():
                 if isinstance(module, nn.Linear):
+                    #Get hooked gradients and inputs for each layer
                     input_activation = getattr(module, 'input_activation')
                     output_gradient = getattr(module, 'output_gradient')
 
@@ -216,8 +218,9 @@ def ACKTR(global_params):
                     for param in module.parameters():
                         raw_grad = param.grad.data        
                         if raw_grad.dim() == 2:
+                            #Weights update: Natural gradient better accounts for curvature in parameter space
                             natural_grad = G_inv @ raw_grad @ A_inv
-                        else:  # bias
+                        else:  # bias updaate
                             natural_grad = G_inv @ raw_grad.unsqueeze(1)
                             natural_grad = natural_grad.squeeze(1)
                         param.data -= LR * natural_grad
@@ -233,16 +236,25 @@ def ACKTR(global_params):
                     batch_size = input_activation.shape[0]
                     C_out = output_gradient.shape[1]
 
+                    #Repshape to [batch_size, H_out, W_out, out_channels]
                     output_gradient.permute(0, 2, 3, 1)
+                    #Reshape to [batch_size * H_out * W_out, out_channels] so that we have a matrix where each element
+                    #represent the gradient of the loss function wrt that activation
                     output_gradient = output_gradient.view(-1, C_out)
 
+                    # For convolutional inputs, we must unfold them into shape:
+                    #   [batch_size, in_channels * kernel_h * kernel_w, num_patches]
+                    # num_patches: the number of space in the input where our kernels can be applied
                     input_activation = torch.nn.functional.unfold(
                         input_activation, 
                         kernel_size=module.kernel_size, 
                         stride=module.stride, 
                         padding=module.padding
                         )
+                    # Reshape to [batch_size, num_patches, in_channels * kernel_h * kernel_w]
                     input_activation = input_activation.permute(0, 2, 1).contiguous()
+                    # reshape to [batch_size * num_patches, in_channels * kernel_h * kernel_w] so that we have
+                    # a matrix where each element represents the activation of the kernel at that location of the input
                     input_activation = input_activation.view(-1, input_activation.shape[-1])
 
                     G_inv, A_inv = KFac(input_activation, output_gradient)
@@ -267,6 +279,7 @@ def ACKTR(global_params):
                         param.data -= LR * natural_grad
 
                 elif isinstance(module, LSTM):
+                    #LSTM is essenitally a special linear layer here
                     lstm_linear = module.weights
 
                     input_activation = getattr(lstm_linear, 'input_activation')
@@ -288,10 +301,6 @@ def ACKTR(global_params):
                             natural_grad = G_inv @ raw_grad.unsqueeze(1)
                             natural_grad = natural_grad.squeeze(1)
                         param.data -= LR * natural_grad
-
-        optimizer.step()
-        optimizer.zero_grad()
-        local_model.zero_grad()
 
         
 
