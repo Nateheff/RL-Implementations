@@ -49,20 +49,21 @@ def PPO(steps):
 
     2. We then use our current policy to get new log probs for these same states and actions
 
+    3. This ratio is our target, it tells us how the probability distribution of our policy has changed, and we want to see it grow for more advantageous actions and decrease for less advantageous ones. 
+    
+    NOTE: We don't want this ratio to become too large, else we have large updates and unstable training, and this is where PPO comes in. Many methods use complex bounds (Like the KL divergence bound in TRPO), but PPO simplifies things by simply bounding the ratio to be between [1-eps, 1+eps].
+
+    4. We use our clipped ratio and unclipped (TRPO) ratio to calculate two objectives
+
+    5. To get a conservative loss estimate and thus a more conservaitve update, we take the minimum of these two
+
+    6. Simple Adam update
+
     3. We then calculate our surrogate loss
     NOTE: This loss does not directly optimize rewards, it instead looks at how much the probability of actions
     changed weighted by how good those actions were. We are using gradient ascent so we are trying to maximize this.
     
-    4. We then compute our first order derivatives
-
-    5. We then compute out step direction using Conjugate Gradient and Fisher vector product to
-    avoid having to calcualte the full fisher information matrix.
-    Our update is bounded by the KL divergence of the two policies and this bound is represented in
-    the update as step^T * F * step <= 2 * delta
     
-    6.After we calcualte our step, we update our parameters 
-    
-    We use an additional Adam update since our model is also returning Q_values.
     """
     for i in range(steps):
         

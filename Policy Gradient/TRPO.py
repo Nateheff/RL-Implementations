@@ -111,7 +111,7 @@ def conjugate_gradient(g, states, n_steps, residual_min=1e-10):
         if rs_new < residual_min:
             break
 
-        v = r + (rs_new / rs_old) * v
+        v = r + (rs_new / rs_old) * v # V is encoded with the curvature of F via this update which is used to update x
         rs_old = rs_new
     return x
 

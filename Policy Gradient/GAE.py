@@ -172,6 +172,9 @@ def TRPO_GAE(steps):
     global policy
 
     """
+    The strict differenct between TRPO and TRPO + GAE is in TRPO, we use advantage defined Return - Value estimate, while is TRPO + GAE, we use advantage defined as an exponentially weighted average of k-step advantage estimators.
+    GAE takes the sum of many k-step advantage estimators that use a k-step TD error as the estimator.
+    A k-step TD error looks like: delta_k = r + yr + y^2 * r + ... + y^k-1 * r + y^k * V(s_t+k) - V(s_t)
     1. We collect a batch of states, actions, advantages, log probs, and rewards following the old policy
 
     2. We then use our current policy to get new log probs for these same states and actions
@@ -196,7 +199,7 @@ def TRPO_GAE(steps):
         old_policy.load_state_dict(policy.state_dict())
         for param in old_policy.parameters():
             param.requires_grad = False
-
+        #See utils.py in this directoy for docs on collecting GAE advantages
         states, actions, advantages, log_probs_old, returns = get_batches_GAE(2048, old_policy)
 
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)

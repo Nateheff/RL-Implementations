@@ -285,7 +285,11 @@ def get_batches_GAE(batch_size, policy):
             final_value, _ = policy(current_state)
             final_value = final_value.squeeze(0)
 
-
+        """
+        This is the difference between vanilla TRPO and TRPO + GAE.
+        All we're changing is the reward metric we use in the policy gradient formula by here using
+        weighted sum of different step TD errors to be our estimate of advantage.
+        """
         next_value = final_value
         for i in reversed(range(len(episode_rewards))):
             if i == len(episode_rewards) - 1:
@@ -318,7 +322,7 @@ def get_batches_GAE(batch_size, policy):
 
 
 def get_batches_ACKTR(batch_size, policy, hidden_size):
-    batch_episodes = []
+
     batch_actions = []
     batch_advantages = []
     
