@@ -183,7 +183,7 @@ def ACKTR(global_params):
         cell_state = torch.zeros(local_model.hidden_size)
 
         
-        values, actions, advantages, log_probs, returns = get_batches_ACKTR(256, local_model, 128)
+        values, actions, advantages, log_probs, returns = get_batches_GAE(256, local_model, 128)
         
         # Normalize advantages
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
@@ -191,7 +191,7 @@ def ACKTR(global_params):
 
         loss_policy = -(log_probs * advantages).sum()
 
-        loss_value = F.mse_loss(values, returns)  # shape match
+        loss_value = F.mse_loss(values, returns)  
 
         loss = loss_policy + loss_value
         print(loss)
