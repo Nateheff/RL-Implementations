@@ -20,6 +20,7 @@ PyTorch implementations of fundamental reinforcement learning algorithms based o
 | **GAE** (Generalized Advantage Estimation) | [Schulman et al. (2018)](https://arxiv.org/pdf/1506.02438) | PyTorch | ✅ |
 | **PPO** (Proximal Policy Optimization) | [Schulman et al. (2017)](https://arxiv.org/pdf/1707.06347) | PyTorch | ✅ |
 | **ACKTR** (Actor Critic Kronecker Factored Trust Region) | [Wu et al. (2017)](https://arxiv.org/pdf/1708.05144) | PyTorch | ✅ |
+| **SAC** (Soft Actor Critic) | [Haarnoja et al. (2018)](https://arxiv.org/pdf/1801.01290) | PyTorch | - |
 
 
 
