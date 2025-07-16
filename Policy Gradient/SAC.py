@@ -42,7 +42,7 @@ LOG_STD_MIN = -20
 LOG_STD_MAX = 5
 
 log_alpha = torch.tensor([0.01], requires_grad=True) #In log space for numerical stability
-alpha_optim = optim.Adam([log_alpha], lr=1e-4)
+alpha_optim = optim.Adam([log_alpha], lr=1e-4) #We use a learnable alpha parameter for the policy update
 target_entropy = -float(17)  # Typically: -|A|
 
 class Policy(nn.Module):
@@ -57,7 +57,13 @@ class Policy(nn.Module):
         self.optim = optim.Adam(self.parameters())
 
     def forward(self, x):
+        """
+        In SAC, we use our backbone to get the mean and log standard deviation which will be used to define a Gaussian
+        distribution for each dimension in the output action. These Gaussian are defined and sample elementwise to get our
+        final action (after being clamped between the enviroment action range)
 
+        We then use these means, deivations, pre tanh action, and post tanh actions to get the log prob of the action.
+        """
         x = self.lin1(x)
         x_1 = self.relu(x)
         x = self.lin2(x)
@@ -75,12 +81,17 @@ class Policy(nn.Module):
         return action, log_prob
     
     def get_action(self, mean, deviation):
-        
+        """
+        Define the elementwise Guassians and squach using tanh and environment scaling
+        """
         pre_action = torch.normal(mean=mean, std=deviation)
         action = torch.tanh(pre_action) * 0.4
         return action, pre_action
     
     def get_log_probs(self, mean, std, eps, pre_tanh, action):
+        """
+        Get the probability of each action dimension's value and sum to get total log prob of the current action.
+        """
         normal = torch.distributions.Normal(mean, std)
 
         log_prob = normal.log_prob(pre_tanh)
@@ -88,7 +99,7 @@ class Policy(nn.Module):
 
         # correction for Tanh squashing
         log_prob -= torch.sum(
-            torch.log(1 - action.pow(2) + 1e-6),
+            torch.log(1 - action.pow(2) + eps),
             dim=-1, keepdim=True
         )
 
@@ -100,7 +111,7 @@ class Policy(nn.Module):
 class Critic(nn.Module):
     def __init__(self, hidden_size, action_size, state_size):
         super().__init__()
-
+        
         self.in_size = action_size + state_size 
         self.relu = nn.ReLU()
         self.lin1 = nn.Linear(in_features=self.in_size, out_features=hidden_size)
@@ -156,7 +167,11 @@ obs = torch.from_numpy(numpy.stack(observation, dtype=numpy.float32))
 D = deque(maxlen=250)
 
 def fill_buffer(buffer_size, num_episodes):
-    global buffer
+    """
+    We fill our repaly buffer so that we can sample for traning
+    Each transition is (state, action, reward, next_state)
+    """
+    global D
     steps_per_episode = buffer_size // num_episodes
 
     while len(D) < buffer_size:
@@ -215,7 +230,7 @@ def SAC(steps):
 
         action_step = action.detach().numpy()
         next_obs, reward, terminated, truncated, info = env.step(action_step)
-        next_obs = torch.from_numpy(numpy.stack(next_obs))
+        next_obs = torch.from_numpy(numpy.stack(next_obs, dtype=numpy.float32))
 
         new_transition = (new_obs, action, reward, next_obs)
 
@@ -224,8 +239,9 @@ def SAC(steps):
         batch = get_randoms(D, n_randoms)
         batch_states, batch_actions, batch_rewards, batch_next = parse_batch(batch)
 
-        # for i in range(n_randoms):
+        #We use the state from our replay buffer and calculate new actions & logs probs to be used in Q-value calculations
         new_actions, new_log_probs = policy(batch_states)
+        log_probs = new_log_probs.squeeze()
 
         batch_pairs = torch.cat((batch_states, new_actions), dim=1)
 
@@ -233,8 +249,7 @@ def SAC(steps):
 
         q_values1, q_values2 = Q_1(batch_pairs).squeeze(), Q_2(batch_pairs).squeeze()
 
-        
-        log_probs = new_log_probs.squeeze()
+        #We use the minimum of our q estimates to mitigate overestimation bias.
         q_values = torch.minimum(q_values1, q_values2)
 
         value_part = (q_values - log_probs)
@@ -256,6 +271,7 @@ def SAC(steps):
         
         total_loss = value_obj + q_obj_1 + q_obj_2 + policy_obj
         total_loss.backward()
+        print(total_loss)
 
         alpha_loss = -(log_alpha * (log_probs + target_entropy).detach()).mean()
         alpha_optim.zero_grad()
@@ -276,4 +292,4 @@ def SAC(steps):
 
 
 
-SAC(100)
+SAC(200)
