@@ -41,6 +41,9 @@ from utils import *
 LOG_STD_MIN = -20
 LOG_STD_MAX = 5
 
+"""
+Alpha is applied in our policy loss and balances exploration by weighting the log probabilities in the loss. As alpha increases, the log probabilities will have greater impact on the loss resulting is higher loss for the same state-action pairs, thus encouraging exploration
+"""
 log_alpha = torch.tensor([0.01], requires_grad=True) #In log space for numerical stability
 alpha_optim = optim.Adam([log_alpha], lr=1e-4) #We use a learnable alpha parameter for the policy update
 target_entropy = -float(17)  # Typically: -|A|
@@ -156,6 +159,8 @@ Q_2 = Critic(512, 17, 348)
 value_function = StateValue(512)
 value_function_target = StateValue(512)
 
+D = deque(maxlen=250)
+
 env = gym.make("Humanoid-v5")
 
 observation, info = env.reset(seed=42)
@@ -163,15 +168,12 @@ observation, info = env.reset(seed=42)
 obs = torch.from_numpy(numpy.stack(observation, dtype=numpy.float32))
 
 
-
-D = deque(maxlen=250)
-
-def fill_buffer(buffer_size, num_episodes):
+def fill_buffer(buffer_size, num_episodes, D=None):
     """
     We fill our repaly buffer so that we can sample for traning
     Each transition is (state, action, reward, next_state)
     """
-    global D
+
     steps_per_episode = buffer_size // num_episodes
 
     while len(D) < buffer_size:
@@ -220,7 +222,7 @@ def parse_batch(batch):
 def SAC(steps):
     
     n_randoms = 10
-    fill_buffer(250, 10)
+    fill_buffer(250, 10, D)
     for i in range(steps):
 
         new_obs, info = env.reset()
@@ -252,6 +254,7 @@ def SAC(steps):
         #We use the minimum of our q estimates to mitigate overestimation bias.
         q_values = torch.minimum(q_values1, q_values2)
 
+        #Soft value update includes entropy (subtracting log probs)
         value_part = (q_values - log_probs)
         value_obj = F.mse_loss(values, value_part)
 
@@ -262,7 +265,11 @@ def SAC(steps):
         q_obj_2 = F.mse_loss(q_values2, q_part)
         
         alpha = torch.exp(log_alpha)
-        policy_obj = (q_values - alpha.detach() * log_probs).mean()
+        """
+        In SAC, they use the Max Entropy Framework which seeks to maximize reward while acting as 
+        randomly as possible. This loss reflects this by increasing the loss as the log probs increase, thus "punishing" certainty and incentivising exploration.
+        """
+        policy_obj = (alpha.detach() * log_probs - q_values).mean()
 
         policy.optim.zero_grad()
         value_function.optim.zero_grad()
@@ -273,6 +280,7 @@ def SAC(steps):
         total_loss.backward()
         print(total_loss)
 
+        #Serves as an exploration balance
         alpha_loss = -(log_alpha * (log_probs + target_entropy).detach()).mean()
         alpha_optim.zero_grad()
         alpha_loss.backward()
