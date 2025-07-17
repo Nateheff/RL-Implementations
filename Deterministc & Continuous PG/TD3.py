@@ -1,3 +1,23 @@
+"""
+
+Twin Delayed Deep Deterministic
+
+Twin: Twin refers to training two indepedent state-action value functions. We train the two 
+    independently and use the minimum estimate of the two in the update of the state-value
+    function parameters. This is done to mitigate the overestimation bias.
+
+Delayed: Delayed refers to delaying policy updates, allowing value functions estimates to
+    converge before the policy is improved. This stabilizes loss and avoids overfitting to 
+    a noisy and inaccurate value function.
+
+Deep Deterministic: Action outputs of our policy are deterministic, no stochasticity. Thus, we 
+    are using deterministic policy gradient where we take the expected gradient of the state-action
+    value function wrt. the action time the gradient of the policy wrt. its parameters.
+
+
+
+"""
+
 import gymnasium as gym
 import torch
 import torch.nn as nn
@@ -125,8 +145,12 @@ def TD3(steps):
         batch = get_randoms(D, n_randoms)
         batch_states, batch_actions, batch_rewards, batch_next = parse_batch(batch)
 
+        """
+        We add noise to encourage exploration.
+        """
         batch_noise = torch.normal(0, sigma, size=batch_next.shape)
         next_actions = actor_target(batch_next) + batch
+        #Our enviroment uses actions between [-0.4, 0.4]
         next_actions = torch.clamp(next_actions, -0.4, 0.4)
 
         next_pairs = torch.cat(batch_next, next_actions, dim=1)
@@ -134,9 +158,12 @@ def TD3(steps):
         q_target_1 = critic_target_1(next_pairs)
         q_target_2 = critic_target_2(next_pairs)
 
+        #Minimum to mitigate overestimation bias
         q_targets = torch.minimum(q_target_1, q_target_2)
 
-        critic_targets = batch_rewards + GAMMA * q_targets
+        #In the paper, they have a state-value function used in the targets, but
+        # in practice, we appx. this function using our state-action functions.
+        q_targets = batch_rewards + GAMMA * q_targets
 
         batch_pairs = torch.cat(batch_states, batch_actions, dim=1)
         q_current_1 = critic_1(batch_pairs)
@@ -144,6 +171,7 @@ def TD3(steps):
         
         q_currents = torch.minimum(q_current_1, q_current_2)
 
+        #Soft update using essentially TD error
         q_loss = F.mse_loss(q_targets, q_currents)
 
         q_loss.backward()
@@ -152,7 +180,9 @@ def TD3(steps):
         critic_1.step()
         critic_2.step()
 
+        #Delay
         if i % 3 == 0:
+            #dQ/da * da/dθ automatically and we want to maximize q, so we minimize the negative.
             policy_loss = -q_current_1.mean()
             actor.optim.zero_grad()
             policy_loss.backward()
