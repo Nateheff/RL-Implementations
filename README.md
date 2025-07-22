@@ -22,6 +22,7 @@ PyTorch implementations of fundamental reinforcement learning algorithms based o
 | **ACKTR** (Actor Critic Kronecker Factored Trust Region) | [Wu et al. (2017)](https://arxiv.org/pdf/1708.05144) | PyTorch | ✅ |
 | **SAC** (Soft Actor Critic) | [Haarnoja et al. (2018)](https://arxiv.org/pdf/1801.01290) | PyTorch | ✅ |
 | **TD3** (Twin Delayed Deep Deterministic PG) | [Fujimoto et al. (2018)](https://arxiv.org/pdf/1802.09477) | PyTorch | ✅ |
+| **RLOO** (REINFORCE Leave-One-Out) | [Ahmadian et al. (2024)](https://arxiv.org/pdf/2402.14740) | PyTorch | ✅ |
 
 
 
