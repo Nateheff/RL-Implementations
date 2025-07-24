@@ -22,7 +22,7 @@ gym.register_envs(ale_py)
 env = gym.make("ALE/Pong")
 observation, info = env.reset(seed=42)
 
-D = deque(maxlen=50)
+D = deque(maxlen=250)
 
 def process(observation):
 
