@@ -24,7 +24,7 @@ PyTorch implementations of fundamental reinforcement learning algorithms based o
 | **TD3** (Twin Delayed Deep Deterministic PG) | [Fujimoto et al. (2018)](https://arxiv.org/pdf/1802.09477) | PyTorch | ✅ |
 | **RLOO** (REINFORCE Leave-One-Out) | [Ahmadian et al. (2024)](https://arxiv.org/pdf/2402.14740) | PyTorch | ✅ |
 | **C51** (Categorical 51 Atoms) | [Bellemare et al. (2017)](https://arxiv.org/pdf/1707.06887) | PyTorch | ✅ |
-| **GRPO** (Group Relative Policy Optim.) | [Shao et al. (2024)](https://arxiv.org/pdf/2402.03300) | PyTorch | ✅ |
+| **GRPO** (Group Relative Policy Optimization) | [Shao et al. (2024)](https://arxiv.org/pdf/2402.03300) | PyTorch | ✅ |
 
 
 
