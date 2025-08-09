@@ -3,8 +3,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy.random as rand
-from PIL import Image
-import numpy
+import pickle
 
 from utils import *
 
@@ -18,7 +17,7 @@ class Q_Function(nn.Module):
         self.lin = nn.Linear(32*9*9, out_features=256)
         self.out = nn.Linear(in_features=256, out_features=6)
         self.loss = nn.MSELoss()
-        self.optimizer = optim.RMSprop(self.parameters(), lr=0.01)
+        self.optimizer = optim.RMSprop(self.parameters(), lr=1e-4)
         self.target_counter = 0
         
     def forward(self, x:torch.Tensor):
@@ -26,7 +25,10 @@ class Q_Function(nn.Module):
         x = self.relu(x)
         x = self.conv2(x)
         x = self.relu(x)
-        x = x.flatten()
+        if len(x.shape) > 3:
+            x = x.view(x.shape[0], -1)
+        else:
+            x = x.flatten()
         x = self.lin(x)
         x = self.out(x)
         return x
@@ -42,15 +44,19 @@ q_target = Q_Function(16, 8, 4)
 
 def learn_DQN(q_target:Q_Function, q_current:Q_Function, transitions=None):
 
-    q_target.zero_grad()
-
-    target = torch.tensor([transition[2] + GAMMA * torch.max(q_target(transition[3])).item() for transition in transitions])
-    current = torch.tensor([q_current(transition[0])[transition[1]] for transition in transitions])
+    q_current.optimizer.zero_grad()
+    rewards = torch.tensor([transition[2] for transition in transitions])
+    next_obs = torch.stack([transition[3] for transition in transitions])
+    current_obs = torch.stack([transition[0] for transition in transitions])
+    with torch.no_grad():
+        targets = torch.max(q_target(next_obs), dim=-1).values
+    currents = q_current(current_obs)
     
+    target = rewards + GAMMA * targets
+    current = torch.stack([current[transition[1]] for current, transition in zip(currents, transitions)])
 
-    loss = q_current.loss(target, current)
+    loss = q_current.loss(current, target)
     
-    loss.requires_grad = True
     loss.backward()
     q_current.optimizer.step()
     q_current.target_counter += 1
@@ -66,15 +72,23 @@ def learn_DDQN(q_target:Q_Function, q_current:Q_Function, transitions=None):
     only subtracting only the observed (s,a) pair with respect to the current network's paramters. This overestimation
     causes a bias that is resolved by letting our current network choose the action and our target network evaluate said action.
     """
-    q_target.zero_grad()
+    q_current.optimizer.zero_grad()
 
-    target = torch.tensor([transition[2] + GAMMA * q_target(transition[3])[torch.argmax(q_current[transition[3]])].item() for transition in transitions])
-    current = torch.tensor([q_current(transition[0])[transition[1]] for transition in transitions])
+    rewards = torch.tensor([transition[2] for transition in transitions])
+    next_obs = torch.stack([transition[3] for transition in transitions])
+    current_obs = torch.stack([transition[0] for transition in transitions])
+    with torch.no_grad():
+        targets = q_target(next_obs)
+    currents = q_current(current_obs)
+    target_idx = torch.argmax(q_current(next_obs), dim=-1)
+    targets = targets[torch.arange(0,len(targets)), target_idx]
+    
+    target = rewards + GAMMA * targets
+    current = torch.stack([current[transition[1]] for current, transition in zip(currents, transitions)])
+
+    loss = q_current.loss(current, target)
     
 
-    loss = q_current.loss(target, current)
-    
-    loss.requires_grad = True
     loss.backward()
     q_current.optimizer.step()
     q_current.target_counter += 1
@@ -84,6 +98,9 @@ def train(episodes):
 
     for _ in range (episodes):
 
+        """
+        Our input is not a singel frame, but a sequence of k frames. (k = 4 usually)
+        """
         input = collect_experience(env)
         action, values, greedy = e_greedy(q_current, input)
         observation, reward, terminated, truncated, info = env.step(action)
@@ -97,9 +114,11 @@ def train(episodes):
             continue
         randoms = get_randoms(D)
         randoms.append(new_transition)
-        learn_DQN(q_target, q_current, new_transition, randoms)
-        if q_current.target_counter == 1000:
+        learn_DQN(q_target, q_current, randoms)
+        if q_current.target_counter == 100:
+            
             q_target.load_state_dict(q_current.state_dict())
+            q_current.target_counter = 0
     
 
 def play(n_gamnes):
@@ -123,3 +142,7 @@ def play(n_gamnes):
 
 
 
+if __name__ == "__main__":
+    train(500)
+    torch.save(q_current.state_dict(), 'dqn.pt')
+    
