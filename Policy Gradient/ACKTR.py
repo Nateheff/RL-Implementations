@@ -9,7 +9,7 @@ import gymnasium as gym
 import ale_py
 
 ALPHA = 0.99
-LR = 0.001
+LR = 1e-5
 
 """
 ACKTR (Actor Critic Kronecker-Factored Trust Region)
@@ -24,12 +24,6 @@ flat Euclidian space. Encoding curvature allows for more informed updates
 The FIM approximate is calculated on a layer-wise basis as are updates.
 """
 
-"""
-Implementation Notes:
-
-We need to first fix our batches.
-1. Collect batches with information about 
-"""
 
 class LSTM(nn.Module):
     def __init__(self, hidden_size, input_size):
@@ -151,19 +145,22 @@ def register_kfac_hooks(model):
 
 
 def KFac(input, gradient):
+
+    N = input.shape[0] #Batch size to use for normalizing gradients
+
     # Layer gradient convariance matrix
-    G = gradient.mT @ gradient
+    G = (gradient.mT @ gradient) / float(N)
     #Layer input covariance matrix
-    A = input.mT @ input
+    A = (input.mT @ input) / float(N)
 
     # Invert both and add small quanitity for numerical stability
-    G_i = torch.linalg.inv(G + 1e-5 * torch.eye(G.shape[0]))
-    A_i = torch.linalg.inv(A + 1e-5 * torch.eye(A.shape[0]))
+    G_i = torch.linalg.inv(G + 1e-2 * torch.eye(G.shape[0]))
+    A_i = torch.linalg.inv(A + 1e-2 * torch.eye(A.shape[0]))
 
     return G_i, A_i
 
 def ACKTR(global_params):
-    optimizer = torch.optim.RMSprop(global_params.parameters(), lr=1e-4)
+    
 
     local_model = ActorCritic(16, 8, 4)
     local_model.load_state_dict(global_params.state_dict())
@@ -174,10 +171,6 @@ def ACKTR(global_params):
     
 
     for _ in range(50):
-
-
-        local_model.load_state_dict(global_params.state_dict())
-
 
         hidden_state = torch.zeros(local_model.hidden_size)
         cell_state = torch.zeros(local_model.hidden_size)
@@ -194,7 +187,7 @@ def ACKTR(global_params):
         loss_value = F.mse_loss(values, returns)  
 
         loss = loss_policy + loss_value
-        print(loss)
+
         #Compute new gradients
         local_model.zero_grad()
         loss.backward()
@@ -237,7 +230,7 @@ def ACKTR(global_params):
                     C_out = output_gradient.shape[1]
 
                     #Repshape to [batch_size, H_out, W_out, out_channels]
-                    output_gradient.permute(0, 2, 3, 1)
+                    output_gradient = output_gradient.permute(0, 2, 3, 1).contiguous()
                     #Reshape to [batch_size * H_out * W_out, out_channels] so that we have a matrix where each element
                     #represent the gradient of the loss function wrt that activation
                     output_gradient = output_gradient.view(-1, C_out)
@@ -288,8 +281,8 @@ def ACKTR(global_params):
                     if input_activation is None or output_gradient is None:
                         continue
 
-                    output_gradient = output_gradient.view(output_gradient.shape[0], -1)
-                    input_activation = input_activation.view(input_activation.shape[0], -1)
+                    output_gradient = output_gradient.contiguous().view(output_gradient.shape[0], -1)
+                    input_activation = input_activation.contiguous().view(input_activation.shape[0], -1)
                     G_inv, A_inv = KFac(input_activation, output_gradient)
 
                     for param in lstm_linear.parameters():
@@ -302,7 +295,7 @@ def ACKTR(global_params):
                             natural_grad = natural_grad.squeeze(1)
                         param.data -= LR * natural_grad
 
-        
+            global_params.load_state_dict(local_model.state_dict())
 
 
 
@@ -331,3 +324,4 @@ def learn_async():
     
 if __name__ == "__main__":
     learn_async()
+    

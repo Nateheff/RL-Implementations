@@ -41,7 +41,6 @@ q_current = Q_Function(16, 8, 4)
 q_target = Q_Function(16, 8, 4)
 
 
-
 def learn_DQN(q_target:Q_Function, q_current:Q_Function, transitions=None):
 
     q_current.optimizer.zero_grad()
@@ -87,7 +86,6 @@ def learn_DDQN(q_target:Q_Function, q_current:Q_Function, transitions=None):
     current = torch.stack([current[transition[1]] for current, transition in zip(currents, transitions)])
 
     loss = q_current.loss(current, target)
-    
 
     loss.backward()
     q_current.optimizer.step()
@@ -114,7 +112,7 @@ def train(episodes):
             continue
         randoms = get_randoms(D)
         randoms.append(new_transition)
-        learn_DQN(q_target, q_current, randoms)
+        learn_DDQN(q_target, q_current, randoms)
         if q_current.target_counter == 100:
             
             q_target.load_state_dict(q_current.state_dict())
@@ -144,5 +142,5 @@ def play(n_gamnes):
 
 if __name__ == "__main__":
     train(500)
-    torch.save(q_current.state_dict(), 'dqn.pt')
+    
     

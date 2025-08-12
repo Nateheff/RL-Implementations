@@ -1,3 +1,12 @@
+"""
+A3C (Asnychronous Advantage Actor-Critic)
+
+A3C uses the traditional stochastic policy gradient objective, using advantage in place of reward.
+Advantage is calculated here as essentially the weighted sum of TD errors.
+The async functioanlity of A3C involves running many local trials using local models and then
+periodically updating the shared global model from each local model's updates.
+"""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -93,6 +102,7 @@ class ActorCritic(nn.Module):
     
 global_model = ActorCritic(16, 8, 4)
 global_model.share_memory()
+global_loss = []
 
 # Share the RMSprop running averages across processes
 for name, running_avg in global_model.running_avg.items():
@@ -112,7 +122,7 @@ def A3C(global_params):
 
     gym.register_envs(ale_py)
     env = gym.make("ALE/Pong")
-    for _ in range(50):
+    for _ in range(500):
 
 
         local_model.load_state_dict(global_params.state_dict())
@@ -178,7 +188,6 @@ def A3C(global_params):
             loss_value = F.mse_loss(states[i], torch.tensor([R], dtype=torch.float32))  # shape match
 
             loss += loss_policy + loss_value
-
         #Compute new gradients
         local_model.zero_grad()
         loss.backward()
@@ -211,7 +220,7 @@ def learn_async():
     try:
         workers = []
         
-        for _ in range(1):
+        for _ in range(3):
           
             
             
@@ -232,3 +241,4 @@ def learn_async():
     
 if __name__ == "__main__":
     learn_async()
+

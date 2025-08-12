@@ -5,6 +5,7 @@ from utils import *
 from PrioritizedReplay import PrioritizedMemory
 
 
+
 class Dueling_DQN(nn.Module):
     def __init__(self, kernels, kernel_dim, stride):
         super().__init__()
@@ -19,7 +20,7 @@ class Dueling_DQN(nn.Module):
         self.value_stream = nn.Linear(512, out_features=1)
         self.advantage_stream = nn.Linear(512, out_features=6)
         
-        self.lr = 0.0001
+        self.lr = 1e-4
         self.loss = nn.MSELoss()
         self.optimizer = optim.RMSprop(self.parameters(), lr=self.lr)
         self.target_counter = 0
@@ -123,7 +124,6 @@ def learn_DuelingDDQN_prioritized(q_target:Dueling_DQN, q_current:Dueling_DQN, a
     loss = (weights * td_errors.pow(2)).mean()
     
     loss.backward()
-    print(loss)
     q_current.optimizer.step()
     
     return td_errors
@@ -203,10 +203,12 @@ def train_prioritized(episodes):
 
         memory.add(new_transition, abs(priorities[4]))
 
-        if q_current.target_counter == 1000:
+        if q_current.target_counter == 100:
             q_target.load_state_dict(q_current.state_dict())
+            q_current.target_counter = 0
 
-train_prioritized(5000)
+train_prioritized(500)
+
 
 
 
