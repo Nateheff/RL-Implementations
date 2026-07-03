@@ -8,7 +8,7 @@ PyTorch implementations of fundamental reinforcement learning algorithms based o
 
 ## 📜 Implemented Algorithms
 
-| Algorithm | Paper | Framework | Status |
+| Algorithm | Paper | Framework | Done |
 |-----------|-------|-----------|--------|
 | **DQN** (Deep Q-Network) | [Mnih et al. (2015)](https://www.cs.toronto.edu/~vmnih/docs/dqn.pdf) | PyTorch | ✅ |
 | **Double DQN** | [van Hasselt et al. (2015)](https://arxiv.org/abs/1509.06461) | PyTorch | ✅ |
